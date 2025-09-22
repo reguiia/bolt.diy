@@ -1,4 +1,7 @@
-import { vitePlugin as remixVitePlugin } from '@remix-run/dev';
+import {
+  cloudflareDevProxyVitePlugin as remixCloudflareDevProxy,
+  vitePlugin as remixVitePlugin,
+} from '@remix-run/dev';
 import UnoCSS from 'unocss/vite';
 import { defineConfig, type ViteDevServer } from 'vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
@@ -40,53 +43,26 @@ ${code}`,
         v3_throwAbortReason: true,
         v3_lazyRouteDiscovery: true,
       },
-      // Conditionally set the server preset based on the environment
-      serverNodeBuiltinsPolyfill: {
-        modules: {
-          buffer: true,
-          events: true,
-          util: true,
-          stream: true,
-        },
-      },
-      serverConditions: ['node'],
-      serverDependenciesToBundle: [
-        // Add any server-side dependencies that need to be bundled
-        // This is often necessary for polyfills or specific libraries
-        'isbot',
-        'cross-fetch',
-        'undici',
-      ],
-      serverPlatform: 'node',
-      serverMainFields: ['main', 'module'],
-      // Use the Express adapter for Vercel (Node.js environment)
-      ...(process.env.VERCEL
-        ? {
-            serverModuleFormat: 'cjs', // Vercel Serverless Functions often prefer CJS
-            server: '@remix-run/express',
-          }
-        : {
-            // Keep Cloudflare dev proxy for local development
-            server: config.mode === 'development' && !process.env.CI ? '@remix-run/cloudflare' : undefined,
-          }),
+      // --- NEW CONFIGURATION FOR VERCEL ---
+      // Force ESM for server build to support top-level await
+      serverModuleFormat: 'esm',
+      // --- END NEW CONFIGURATION ---
     }),
     UnoCSS(),
     tsconfigPaths(),
     chrome129IssuePlugin(),
   ];
 
-  // Only enable Cloudflare Dev Proxy in *local dev* (not in prod, Vercel, or CI)
+  // 🚫 only enable Cloudflare Dev Proxy in *local dev* (not in prod, Vercel, or CI)
   if (
     config.mode === 'development' &&
     !process.env.VERCEL &&
     !process.env.CI
   ) {
-    // Import the Cloudflare dev proxy only if needed to avoid bundling it for Vercel
-    const { cloudflareDevProxyVitePlugin } = require('@remix-run/dev');
-    plugins.unshift(cloudflareDevProxyVitePlugin());
+    plugins.unshift(remixCloudflareDevProxy());
   }
 
-  if (config.mode === 'production' && !process.env.VERCEL) {
+  if (config.mode === 'production') {
     plugins.push(optimizeCssModules({ apply: 'build' }));
   }
 
